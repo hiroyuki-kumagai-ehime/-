@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>遠征交通費カンタン計算ツール</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f4f6f9;
+            color: #333;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 650px;
+            margin: 0 auto;
+            background: #fff;
+            padding: 24px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        h1 {
+            font-size: 1.25rem;
+            color: #2c3e50;
+            margin-top: 0;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 8px;
+        }
+        h2 {
+            font-size: 1.05rem;
+            color: #34495e;
+            margin-top: 20px;
+            margin-bottom: 8px;
+        }
+        .form-group {
+            margin-bottom: 14px;
+        }
+        label {
+            display: block;
+            font-weight: bold;
+            font-size: 0.9rem;
+            margin-bottom: 4px;
+            color: #555;
+        }
+        input, textarea {
+            width: 100%;
+            padding: 10px;
+            box-sizing: border-box;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            font-size: 1rem;
+        }
+        textarea {
+            height: 90px;
+            resize: vertical;
+        }
+        input:focus, textarea:focus {
+            border-color: #3498db;
+            outline: none;
+        }
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+        .hint {
+            font-size: 0.8rem;
+            color: #7f8c8d;
+            margin-top: 2px;
+        }
+        button {
+            width: 100%;
+            background-color: #2ecc71;
+            color: white;
+            border: none;
+            padding: 14px;
+            font-size: 1.05rem;
+            font-weight: bold;
+            border-radius: 6px;
+            cursor: pointer;
+            margin-top: 15px;
+        }
+        button:hover {
+            background-color: #27ae60;
+        }
+        .result-section {
+            margin-top: 24px;
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            padding: 16px;
+            border-radius: 8px;
+            display: none;
+        }
+        pre {
+            background: #fff;
+            border: 1px solid #ddd;
+            padding: 12px;
+            border-radius: 6px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            font-family: inherit;
+            font-size: 0.95rem;
+            line-height: 1.5;
+        }
+        .line-btn {
+            background-color: #06c755;
+            margin-top: 10px;
+        }
+        .line-btn:hover {
+            background-color: #05b14c;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>遠征交通費カンタン計算ツール</h1>
+    
+    <div class="form-group">
+        <label>ガソリン単価 (円/L)</label>
+        <input type="number" id="gasPrice" value="160">
+    </div>
+
+    <div class="grid-2">
+        <div class="form-group">
+            <label>行き 走行距離 (km)</label>
+            <input type="number" id="distGo" value="53">
+        </div>
+        <div class="form-group">
+            <label>帰り 走行距離 (km)</label>
+            <input type="number" id="distBack" value="57">
+        </div>
+    </div>
+
+    <div class="grid-2">
+        <div class="form-group">
+            <label>高速代（行き） (円)</label>
+            <input type="number" id="tollGo" value="1300">
+        </div>
+        <div class="form-group">
+            <label>高速代（帰り） (円)</label>
+            <input type="number" id="tollBack" value="0">
+        </div>
+    </div>
+
+    <h2>家庭ごとの配車状況</h2>
+    <div class="form-group">
+        <label>配車家庭（運転する家庭・改行区切り）</label>
+        <textarea id="carFamilies">犬神家
+江戸川家
+金田家
+銭形家
+明智家
+古畑家</textarea>
+        <div class="hint">※「名前, 燃費」で個別指定も可（例: 犬神家, 12）</div>
+    </div>
+
+    <div class="form-group">
+        <label>標準燃費 (km/L)</label>
+        <input type="number" id="defaultFuel" value="10">
+    </div>
+
+    <div class="form-group">
+        <label>配車なし家庭（改行区切り）</label>
+        <textarea id="nonCarFamilies">服部家
+浅見家
+十津川家
+神津家
+片桐家
+御手洗家</textarea>
+    </div>
+
+    <button type="button" onclick="calculate()">計算して結果を表示する</button>
+
+    <div class="result-section" id="resultArea">
+        <h2>計算結果</h2>
+        <pre id="outputText"></pre>
+        <a id="lineShareBtn" href="#" target="_blank" style="text-decoration: none;">
+            <button type="button" class="line-btn">LINEでこの結果を送る</button>
+        </a>
+    </div>
+</div>
+
+<script>
+function calculate() {
+    try {
+        const gasPrice = parseFloat(document.getElementById('gasPrice').value) || 0;
+        const distGo = parseFloat(document.getElementById('distGo').value) || 0;
+        const distBack = parseFloat(document.getElementById('distBack').value) || 0;
+        const tollGo = parseFloat(document.getElementById('tollGo').value) || 0;
+        const tollBack = parseFloat(document.getElementById('tollBack').value) || 0;
+        const defaultFuel = parseFloat(document.getElementById('defaultFuel').value) || 10;
+
+        const totalDist = distGo + distBack;
+        const tollTotal = tollGo + tollBack;
+
+        const carRaw = document.getElementById('carFamilies').value.trim().split('\n').filter(s => s.trim() !== '');
+        let carList = [];
+        let totalCarCost = 0;
+
+        carRaw.forEach(line => {
+            let parts = line.split(',');
+            let name = parts[0].trim();
+            let fuel = parts[1] ? parseFloat(parts[1]) : defaultFuel;
+            
+            let gasCost = Math.round((totalDist / fuel) * gasPrice);
+            let cost = gasCost + tollTotal;
+            carList.push({ name: name, fuel: fuel, cost: cost });
+            totalCarCost += cost;
+        });
+
+        const carCount = carList.length;
+        const nonCarList = document.getElementById('nonCarFamilies').value.trim().split('\n').filter(s => s.trim() !== '').map(s => s.trim());
+        const nonCarCount = nonCarList.length;
+
+        const totalFamilies = carCount + nonCarCount;
+        const costPerFamily = totalFamilies > 0 ? Math.round(totalCarCost / totalFamilies) : 0;
+
+        let pairingText = "";
+        if (carCount === nonCarCount && carCount > 0) {
+            pairingText = "【支払い相手】\n";
+            for (let i = 0; i < carCount; i++) {
+                pairingText += `${nonCarList[i]} → ${carList[i].name}\n`;
+            }
+        } else {
+            pairingText = "【集金・お渡し方法】\n";
+            pairingText += `配車なし家庭から各 ${costPerFamily.toLocaleString()}円を集金し、配車家庭へお渡しください。\n`;
+        }
+
+        let text = `遠征交通費精算\n\n` +
+                   `【交通費計算】\n` +
+                   `・行き：${distGo}km（高速 ${tollGo}円）\n` +
+                   `・帰り：${distBack}km（下道 ${tollBack}円）\n` +
+                   `・1台あたり走行：${totalDist}km\n` +
+                   `・ガソリン単価：${gasPrice}円/L\n\n` +
+                   `配車 ${carCount}台 / 総家庭数 ${totalFamilies}家庭\n` +
+                   `交通費総額：${totalCarCost.toLocaleString()}円\n` +
+                   `1家庭あたり：${costPerFamily.toLocaleString()}円\n\n` +
+                   `【配車なし家庭(${nonCarCount}家庭)】\n` +
+                   `${nonCarList.join('、')}\n` +
+                   `→ 各 ${costPerFamily.toLocaleString()}円支払い\n\n` +
+                   `【配車家庭(${carCount}家庭)】\n` +
+                   `${carList.map(c => `${c.name}(燃費${c.fuel}km/L)`).join('、')}\n` +
+                   `→ 各 ${costPerFamily.toLocaleString()}円お渡し\n\n` +
+                   pairingText;
+
+        document.getElementById('outputText').textContent = text;
+        document.getElementById('resultArea').style.display = 'block';
+
+        const encodedText = encodeURIComponent(text);
+        document.getElementById('lineShareBtn').setAttribute('href', `https://line.me/R/msg/text/?${encodedText}`);
+        
+        // スマホで結果エリアへ自動スクロール
+        document.getElementById('resultArea').scrollIntoView({ behavior: 'smooth' });
+
+    } catch (error) {
+        alert('エラーが発生しました: ' + error.message);
+    }
+}
+</script>
+
+</body>
+</html>
