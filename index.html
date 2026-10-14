@@ -149,11 +149,11 @@
         <label>配車家庭（運転する家庭・改行区切り）</label>
         <textarea id="carFamilies">犬神家
 江戸川家
-金田家
+金田家（免除）
 銭形家
-明智家
+明智家（免除）
 古畑家</textarea>
-        <div class="hint">※「名前, 燃費」で個別指定も可（例: 犬神家, 12）</div>
+        <div class="hint">※「名前, 燃費」で個別指定可。費用を免除して他家で割り直す車は、名前の後ろに <b>（免除）</b> と何台でも書けます。</div>
     </div>
 
     <div class="form-group">
@@ -198,35 +198,47 @@ function calculate() {
         const carRaw = document.getElementById('carFamilies').value.trim().split('\n').filter(s => s.trim() !== '');
         let carList = [];
         let totalCarCost = 0;
+        let exemptCostTotal = 0; // 免除枠の車にかかった実費合計
 
         carRaw.forEach(line => {
             let parts = line.split(',');
-            let name = parts[0].trim();
+            let rawName = parts[0].trim();
             let fuel = parts[1] ? parseFloat(parts[1]) : defaultFuel;
             
+            // 「（免除）」や「(免除)」の判定（複数台に対応）
+            let isExempt = rawName.includes('（免除）') || rawName.includes('(免除)');
+            let name = rawName.replace(/（免除）|\(免除\)/g, '').trim();
+
             let gasCost = Math.round((totalDist / fuel) * gasPrice);
             let cost = gasCost + tollTotal;
-            carList.push({ name: name, fuel: fuel, cost: cost });
-            totalCarCost += cost;
+
+            if (isExempt) {
+                exemptCostTotal += cost; 
+                carList.push({ name: name, fuel: fuel, cost: cost, isExempt: true });
+            } else {
+                totalCarCost += cost; 
+                carList.push({ name: name, fuel: fuel, cost: cost, isExempt: false });
+            }
         });
 
-        const carCount = carList.length;
+        const normalCarList = carList.filter(c => !c.isExempt);
         const nonCarList = document.getElementById('nonCarFamilies').value.trim().split('\n').filter(s => s.trim() !== '').map(s => s.trim());
+        
+        const normalCarCount = normalCarList.length;
         const nonCarCount = nonCarList.length;
+        const totalPayingFamilies = normalCarCount + nonCarCount;
 
-        const totalFamilies = carCount + nonCarCount;
-        const costPerFamily = totalFamilies > 0 ? Math.round(totalCarCost / totalFamilies) : 0;
+        // 通常の車代総額 ＋ 免除枠の車代実費 ＝ 最終的に割り振るべき総交通費
+        const grandTotalCost = totalCarCost + exemptCostTotal;
+        const costPerFamily = totalPayingFamilies > 0 ? Math.round(grandTotalCost / totalPayingFamilies) : 0;
 
-        let pairingText = "";
-        if (carCount === nonCarCount && carCount > 0) {
-            pairingText = "【支払い相手】\n";
-            for (let i = 0; i < carCount; i++) {
-                pairingText += `${nonCarList[i]} → ${carList[i].name}\n`;
-            }
-        } else {
-            pairingText = "【集金・お渡し方法】\n";
-            pairingText += `配車なし家庭から各 ${costPerFamily.toLocaleString()}円を集金し、配車家庭へお渡しください。\n`;
+        let exemptNote = "";
+        if (exemptCostTotal > 0) {
+            exemptNote = `※費用免除となる車（計 ${exemptCostTotal.toLocaleString()}円）の費用は、他の全家庭の負担額に含めて均等に割り振っています。\n\n`;
         }
+
+        let pairingText = "【集金・お渡し方法】\n";
+        pairingText += `各家庭の負担額は一律 **${costPerFamily.toLocaleString()}円** です。\n`;
 
         let text = `遠征交通費精算\n\n` +
                    `【交通費計算】\n` +
@@ -234,15 +246,13 @@ function calculate() {
                    `・帰り：${distBack}km（下道 ${tollBack}円）\n` +
                    `・1台あたり走行：${totalDist}km\n` +
                    `・ガソリン単価：${gasPrice}円/L\n\n` +
-                   `配車 ${carCount}台 / 総家庭数 ${totalFamilies}家庭\n` +
-                   `交通費総額：${totalCarCost.toLocaleString()}円\n` +
-                   `1家庭あたり：${costPerFamily.toLocaleString()}円\n\n` +
+                   `交通費総額（実費）：${grandTotalCost.toLocaleString()}円\n` +
+                   `対象家庭数：${totalPayingFamilies}家庭（負担額 各 ${costPerFamily.toLocaleString()}円）\n\n` +
+                   exemptNote +
+                   `【配車家庭(${carList.length}台)】\n` +
+                   carList.map(c => `・${c.name}(燃費${c.fuel}km/L)${c.isExempt ? ' ※費用免除(他家で割勘)' : ''}`).join('\n') + `\n\n` +
                    `【配車なし家庭(${nonCarCount}家庭)】\n` +
-                   `${nonCarList.join('、')}\n` +
-                   `→ 各 ${costPerFamily.toLocaleString()}円支払い\n\n` +
-                   `【配車家庭(${carCount}家庭)】\n` +
-                   `${carList.map(c => `${c.name}(燃費${c.fuel}km/L)`).join('、')}\n` +
-                   `→ 各 ${costPerFamily.toLocaleString()}円お渡し\n\n` +
+                   `${nonCarList.join('、')}\n\n` +
                    pairingText;
 
         document.getElementById('outputText').textContent = text;
@@ -251,7 +261,6 @@ function calculate() {
         const encodedText = encodeURIComponent(text);
         document.getElementById('lineShareBtn').setAttribute('href', `https://line.me/R/msg/text/?${encodedText}`);
         
-        // スマホで結果エリアへ自動スクロール
         document.getElementById('resultArea').scrollIntoView({ behavior: 'smooth' });
 
     } catch (error) {
